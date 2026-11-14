@@ -34,18 +34,21 @@
         .btn-blue { background: #2980b9; }
         .btn-orange { background: #f39c12; }
         .btn-red { background: #e74c3c; }
+        .admin-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92); z-index: 999; padding: 15px; box-sizing: border-box; overflow-y: auto; }
+        .admin-row { display: flex; justify-content: space-between; align-items: center; background: #1e272e; padding: 8px; border-radius: 8px; margin-bottom: 6px; font-size: 12px; }
+        .adm-btn { padding: 6px 8px; font-size: 11px; margin-left: 3px; border-radius: 6px; }
     </style>
 </head>
 <body>
 <div class="header">
     <div>🟢 <span id="my-name">Гравець</span></div>
-    <div style="font-size:11px; color:#bdc3c7;">Каса 3%: <span id="admin-rake">0</span></div>
+    <div style="font-size:11px; color:#ffd700; cursor:pointer;" onclick="openAdmin()">👑 Каса 3%: <span id="admin-rake">0</span></div>
     <div>Фішки: <span id="my-balance">1000</span></div>
 </div>
 <div class="lobby" id="lobby">
     <h2>Трінька Онлайн (Live)</h2>
     <p style="font-size:13px; color:#bdc3c7;">Введи своє ім'я та номер столу</p>
-    <input type="text" id="name-input" placeholder="Твоє ім'я (наприклад: Василь)">
+    <input type="text" id="name-input" placeholder="Твоє ім'я">
     <input type="text" id="room-input" placeholder="Номер столу" value="777">
     <select id="seats-select">
         <option value="2">Стіл на 2 гравців</option>
@@ -71,67 +74,100 @@
     </div>
     <div class="controls" id="controls"></div>
 </div>
+<div class="admin-modal" id="admin-modal">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h3 style="margin:0; color:#ffd700;">👑 Адмін-панель</h3>
+        <button class="btn-red adm-btn" onclick="document.getElementById('admin-modal').style.display='none'">Закрити ✖</button>
+    </div>
+    <div style="background:#2f3640; padding:10px; border-radius:8px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+        <span>Накопичено комісії (3%): <b id="adm-rake-val" style="color:#ffd700;">0</b></span>
+        <button class="btn-orange adm-btn" onclick="resetRake()">Зняти касу</button>
+    </div>
+    <div id="admin-users-list"></div>
+</div>
 <script>
     var tg = window.Telegram ? window.Telegram.WebApp : null;
     if (tg) { tg.ready(); tg.expand(); }
-
     var savedId = localStorage.getItem('trinka_pid');
-    if (!savedId) {
-        savedId = 'p_' + Math.random().toString(36).slice(2, 10);
-        localStorage.setItem('trinka_pid', savedId);
-    }
+    if (!savedId) { savedId = 'p_' + Math.random().toString(36).slice(2, 10); localStorage.setItem('trinka_pid', savedId); }
     var playerId = savedId;
     var userName = localStorage.getItem('trinka_name') || '';
-
-    function parseInitDataUser() {
-        try {
-            if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
-                return tg.initDataUnsafe.user;
-            }
-            if (tg && tg.initData) {
-                var params = new URLSearchParams(tg.initData);
-                var userStr = params.get('user');
-                if (userStr) return JSON.parse(userStr);
-            }
-        } catch (e) {}
-        return null;
-    }
+    var adminPass = localStorage.getItem('trinka_adm') || '';
 
     function syncTgUser() {
-        var u = parseInitDataUser();
-        if (u) {
-            playerId = 'tg_' + u.id;
-            localStorage.setItem('trinka_pid', playerId);
-            var tgFullName = (u.first_name || '') + (u.last_name ? ' ' + u.last_name : '');
-            if (!tgFullName.trim() && u.username) tgFullName = '@' + u.username;
-            if (tgFullName.trim()) {
-                userName = tgFullName.trim();
-                localStorage.setItem('trinka_name', userName);
+        try {
+            var u = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user : null;
+            if (!u && tg && tg.initData) {
+                var us = new URLSearchParams(tg.initData).get('user');
+                if (us) u = JSON.parse(us);
             }
-        }
-        var nameInput = document.getElementById('name-input');
-        if (userName && !nameInput.value) {
-            nameInput.value = userName;
-        }
-        document.getElementById('my-name').innerText = nameInput.value.trim() || userName || 'Гравець';
+            if (u) {
+                playerId = 'tg_' + u.id;
+                localStorage.setItem('trinka_pid', playerId);
+                var fn = (u.first_name || '') + (u.last_name ? ' ' + u.last_name : '');
+                if (!fn.trim() && u.username) fn = '@' + u.username;
+                if (fn.trim()) { userName = fn.trim(); localStorage.setItem('trinka_name', userName); }
+            }
+        } catch (e) {}
+        var ni = document.getElementById('name-input');
+        if (userName && !ni.value) ni.value = userName;
+        document.getElementById('my-name').innerText = ni.value.trim() || userName || 'Гравець';
+        fetch('/api/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: playerId, userName: document.getElementById('my-name').innerText }) })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            document.getElementById('my-balance').innerText = d.balance;
+            document.getElementById('admin-rake').innerText = d.adminRake;
+        });
+    }
+    syncTgUser();
+
+    function openAdmin() {
+        var p = adminPass || prompt('Введіть пароль адміністратора:');
+        if (!p) return;
+        fetch('/api/admin/list', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pass: p }) })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.error) { alert(d.error); adminPass = ''; localStorage.removeItem('trinka_adm'); return; }
+            adminPass = p; localStorage.setItem('trinka_adm', p);
+            renderAdmin(d);
+            document.getElementById('admin-modal').style.display = 'block';
+        });
     }
 
-    syncTgUser();
-    setTimeout(syncTgUser, 500);
+    function renderAdmin(d) {
+        document.getElementById('adm-rake-val').innerText = d.adminRake;
+        document.getElementById('admin-rake').innerText = d.adminRake;
+        var html = '';
+        for (var i = 0; i < d.users.length; i++) {
+            var u = d.users[i];
+            html += '<div class="admin-row"><div><b>' + u.name + '</b><br><span style="color:#aaa;">Баланс: ' + u.balance + '</span></div>' +
+                '<div><button class="btn-green adm-btn" onclick="admDelta(\'' + u.id + '\', 500)">+500</button>' +
+                '<button class="btn-green adm-btn" onclick="admDelta(\'' + u.id + '\', 1000)">+1000</button>' +
+                '<button class="btn-red adm-btn" onclick="admDelta(\'' + u.id + '\', -500)">-500</button></div></div>';
+        }
+        document.getElementById('admin-users-list').innerHTML = html || '<p>Поки немає гравців</p>';
+    }
+
+    function admDelta(targetId, delta) {
+        fetch('/api/admin/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pass: adminPass, targetId: targetId, delta: delta }) })
+        .then(function(r) { return r.json(); })
+        .then(function(d) { renderAdmin(d); });
+    }
+
+    function resetRake() {
+        fetch('/api/admin/resetRake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pass: adminPass }) })
+        .then(function(r) { return r.json(); })
+        .then(function(d) { renderAdmin(d); });
+    }
 
     var currentRoom = '';
     var pollTimer = null;
 
     document.getElementById('btn-sit').onclick = function() {
-        var inputVal = document.getElementById('name-input').value.trim();
-        if (inputVal) {
-            userName = inputVal;
-            localStorage.setItem('trinka_name', userName);
-        } else if (!userName) {
-            userName = 'Гравець_' + Math.floor(Math.random() * 999);
-        }
+        var iv = document.getElementById('name-input').value.trim();
+        if (iv) { userName = iv; localStorage.setItem('trinka_name', userName); }
+        else if (!userName) { userName = 'Гравець_' + Math.floor(Math.random() * 999); }
         document.getElementById('my-name').innerText = userName;
-
         currentRoom = document.getElementById('room-input').value.trim() || '777';
         var maxSeats = document.getElementById('seats-select').value;
         document.getElementById('lbl-room').innerText = currentRoom;
