@@ -6,13 +6,12 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
+    cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/ping', (req, res) => res.send('OK'));
 
 const SUITS = ['♠', '♣', '♥', '♦'];
 const RANKS = [
@@ -23,7 +22,6 @@ const RANKS = [
 
 const RAKE_PERCENT = 0.03;
 let adminRakeBalance = 0;
-
 const rooms = {};
 
 function createDeck() {
@@ -46,13 +44,14 @@ function calculateScore(hand) {
     let normals = hand.filter(c => !c.isJoker);
 
     if (jokers.length === 1 && normals.length === 2) {
-        if (normals[0].rank === normals[1].rank) {
-            return normals[0].rank === 'Т' ? 33 : 30 + normals[0].val;
-        }
+        let c1 = normals.at(0);
+        let c2 = normals.at(1);
+        if (c1.rank === c2.rank) return c1.rank === 'Т' ? 33 : 30 + c1.val;
     } else if (normals.length === 3) {
-        if (normals[0].rank === normals[1].rank && normals[1].rank === normals[2].rank) {
-            return normals[0].rank === 'Т' ? 33 : 30 + normals[0].val;
-        }
+        let c1 = normals.at(0);
+        let c2 = normals.at(1);
+        let c3 = normals.at(2);
+        if (c1.rank === c2.rank && c2.rank === c3.rank) return c1.rank === 'Т' ? 33 : 30 + c1.val;
     }
 
     let acesCount = normals.filter(c => c.rank === 'Т').length + jokers.length;
@@ -85,6 +84,8 @@ function broadcastRoom(roomId) {
             hand: (room.reveal && !other.folded) ? other.hand : null
         }));
 
+        const currentTurnPlayer = room.players.at(room.turnIndex);
+
         io.to(p.id).emit('stateUpdate', {
             roomId: room.id,
             maxSeats: room.maxSeats,
@@ -92,7 +93,7 @@ function broadcastRoom(roomId) {
             isSvara: room.isSvara,
             gameActive: room.gameActive,
             reveal: room.reveal,
-            turnId: room.players[room.turnIndex]?.id || null,
+            turnId: currentTurnPlayer ? currentTurnPlayer.id : null,
             message: room.message,
             adminRake: adminRakeBalance,
             myData: {
@@ -111,14 +112,14 @@ function broadcastRoom(roomId) {
 function nextTurn(room) {
     let active = room.players.filter(p => !p.folded);
     if (active.length <= 1) {
-        finishRound(room, active[0]);
+        finishRound(room, active.at(0));
         return;
     }
     let loops = 0;
     do {
         room.turnIndex = (room.turnIndex + 1) % room.players.length;
         loops++;
-    } while (room.players[room.turnIndex].folded && loops <= room.players.length);
+    } while (room.players.at(room.turnIndex).folded && loops <= room.players.length);
 }
 
 function finishRound(room, winnerOverride = null) {
@@ -146,7 +147,7 @@ function finishRound(room, winnerOverride = null) {
         let names = winners.map(w => w.name).join(', ');
         room.message = `🔥 СВАРА (${maxScore} очок) між: ${names}! Банк ${room.pot} фішок іде далі.`;
     } else {
-        let win = winners[0];
+        let win = winners.at(0);
         let fee = Math.round(room.pot * RAKE_PERCENT);
         let netWin = room.pot - fee;
         adminRakeBalance += fee;
@@ -234,7 +235,7 @@ io.on('connection', (socket) => {
     socket.on('bet', ({ isDarkBet }) => {
         const room = rooms[socket.roomId];
         if (!room || !room.gameActive) return;
-        const p = room.players[room.turnIndex];
+        const p = room.players.at(room.turnIndex);
         if (!p || p.id !== socket.id) return;
 
         let amount = isDarkBet && p.isDark ? 50 : 100;
@@ -251,7 +252,7 @@ io.on('connection', (socket) => {
     socket.on('showdown', () => {
         const room = rooms[socket.roomId];
         if (!room || !room.gameActive) return;
-        const p = room.players[room.turnIndex];
+        const p = room.players.at(room.turnIndex);
         if (!p || p.id !== socket.id) return;
 
         if (p.balance >= 50) {
@@ -264,7 +265,7 @@ io.on('connection', (socket) => {
     socket.on('fold', () => {
         const room = rooms[socket.roomId];
         if (!room || !room.gameActive) return;
-        const p = room.players[room.turnIndex];
+        const p = room.players.at(room.turnIndex);
         if (!p || p.id !== socket.id) return;
 
         p.folded = true;
@@ -290,4 +291,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => console.log(`Сервер Тріньки запущено на порту ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`Server started on ${PORT}`));
