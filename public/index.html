@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Трінька Онлайн</title>
     <script src="https://telegram.org"></script>
-    <script src="/socket.io/socket.io.js"></script>
     <style>
         body {
             background: #123329; color: #fff;
@@ -17,11 +16,6 @@
             display: flex; justify-content: space-between; align-items: center;
             background: rgba(0,0,0,0.45); padding: 8px 12px; border-radius: 10px; font-size: 13px; font-weight: bold;
         }
-        .conn-dot {
-            display: inline-block; width: 9px; height: 9px; border-radius: 50%;
-            background: #e74c3c; margin-right: 5px;
-        }
-        .conn-dot.online { background: #2ecc71; }
         .lobby { margin: auto 0; text-align: center; }
         .lobby input, .lobby select {
             width: 85%; max-width: 280px; padding: 12px; margin: 8px 0;
@@ -36,7 +30,7 @@
             background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.15);
             border-radius: 8px; padding: 6px; text-align: center; font-size: 11px;
         }
-        .p-box.active-turn { border: 2px solid #2ecc71; box-shadow: 0 0 8px #2ecc71; }
+        .p-box.active-turn { border: 2px solid #2ecc71; }
         .p-box.folded { opacity: 0.45; }
         .mini-cards { display: flex; justify-content: center; gap: 3px; margin-top: 4px; }
         .mc { background: #fff; color: #000; border-radius: 3px; padding: 1px 3px; font-weight: bold; font-size: 10px; }
@@ -58,7 +52,7 @@
         .card.hidden { background: repeating-linear-gradient(45deg, #244761, #244761 8px, #3b3259 8px, #3b3259 16px); color: transparent; }
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
         button { padding: 12px 8px; border: none; border-radius: 9px; font-size: 14px; font-weight: bold; cursor: pointer; color: #fff; }
-        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        button:disabled { opacity: 0.4; }
         .btn-green { background: #2ecc71; }
         .btn-purple { background: #8e44ad; }
         .btn-blue { background: #2980b9; }
@@ -69,7 +63,7 @@
 <body>
 
 <div class="header">
-    <div><span class="conn-dot" id="conn-dot"></span><span id="my-name">Гравець</span></div>
+    <div>🟢 <span id="my-name">Гравець</span></div>
     <div style="font-size:11px; color:#bdc3c7;">Каса 3%: <span id="admin-rake">0</span></div>
     <div>Фішки: <span id="my-balance">1000</span></div>
 </div>
@@ -77,7 +71,7 @@
 <div class="lobby" id="lobby">
     <h2>Трінька Онлайн (Live)</h2>
     <p style="font-size:13px; color:#bdc3c7;">Введи номер столу, щоб сісти з друзями</p>
-    <input type="text" id="room-input" placeholder="Номер столу (наприклад: 777)" value="777">
+    <input type="text" id="room-input" value="777">
     <select id="seats-select">
         <option value="2">Стіл на 2 гравців</option>
         <option value="4">Стіл на 4 гравців</option>
@@ -86,82 +80,70 @@
         <option value="12">Стіл на 12 гравців</option>
     </select>
     <br>
-    <button type="button" class="btn-green" id="join-btn" style="width:85%; max-width:280px; margin-top:10px;">Сісти за стіл</button>
-    <div id="conn-text" style="font-size:12px; color:#f1c40f; margin-top:8px;">Підключення до сервера...</div>
+    <button type="button" class="btn-green" style="width:85%; max-width:280px; margin-top:10px;" onclick="joinTable()">Сісти за стіл</button>
 </div>
 
 <div class="game" id="game">
     <div style="font-size:12px; color:#bdc3c7; text-align:center;">
         Стіл #<b id="lbl-room"></b> • Місць: <b id="lbl-seats"></b>
     </div>
-
     <div class="players-grid" id="players-grid"></div>
-
     <div class="pot-box">
         <div class="pot">Банк: <span id="pot">0</span> фішок</div>
         <div style="font-size:11px; color:#a3c2b8;">Комісія столу: 3% від банку</div>
     </div>
-
     <div class="status" id="status">Очікування гравців...</div>
-
     <div style="text-align:center;">
         <div style="font-size:12px;">Ваші карти (Очки: <b id="my-score">?</b>)</div>
         <div class="cards-row" id="my-cards"></div>
     </div>
-
     <div class="controls" id="controls"></div>
 </div>
 
 <script>
     const tg = window.Telegram?.WebApp;
-    if (tg) {
-        tg.ready();
-        tg.expand();
-    }
+    if (tg) { tg.ready(); tg.expand(); }
+
+    const playerId = 'p_' + Math.random().toString(36).substr(2, 9);
     const userName = tg?.initDataUnsafe?.user?.first_name || 'Гравець_' + Math.floor(Math.random()*999);
     document.getElementById('my-name').innerText = userName;
 
-    if (typeof io === 'undefined') {
-        document.getElementById('conn-text').innerText = 'Помилка: бібліотека io не завантажилась';
-        document.getElementById('conn-text').style.color = '#e74c3c';
-    }
+    let currentRoom = '';
+    let pollTimer = null;
 
-    const socket = io();
-
-    socket.on('connect', () => {
-        document.getElementById('conn-dot').classList.add('online');
-        document.getElementById('conn-text').innerText = 'Зв\'язок встановлено ✅';
-        document.getElementById('conn-text').style.color = '#2ecc71';
-    });
-
-    socket.on('connect_error', (err) => {
-        document.getElementById('conn-text').innerText = 'Помилка з\'єднання: ' + err.message;
-        document.getElementById('conn-text').style.color = '#e74c3c';
-    });
-
-    document.getElementById('join-btn').addEventListener('click', () => {
-        if (!socket.connected) {
-            alert('Зачекайте зеленого напису "Зв\'язок встановлено ✅"!');
-            return;
-        }
-        const roomId = document.getElementById('room-input').value.trim() || '777';
+    async function joinTable() {
+        currentRoom = document.getElementById('room-input').value.trim() || '777';
         const maxSeats = document.getElementById('seats-select').value;
-        
-        document.getElementById('lbl-room').innerText = roomId;
-        document.getElementById('lbl-seats').innerText = '1/' + maxSeats;
+
+        const res = await fetch('/api/join', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roomId: currentRoom, maxSeats, playerId, userName })
+        });
+        const data = await res.json();
+        if (data.error) { alert(data.error); return; }
+
         document.getElementById('lobby').style.display = 'none';
         document.getElementById('game').style.display = 'flex';
-        
-        socket.emit('joinRoom', { roomId, maxSeats, userName });
-    });
+        fetchState();
+        pollTimer = setInterval(fetchState, 1000);
+    }
 
-    socket.on('errorMsg', (msg) => {
-        alert(msg);
-        document.getElementById('game').style.display = 'none';
-        document.getElementById('lobby').style.display = 'block';
-    });
+    async function sendAction(action, isDarkBet = false) {
+        await fetch('/api/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roomId: currentRoom, playerId, action, isDarkBet })
+        });
+        fetchState();
+    }
 
-    socket.on('stateUpdate', (state) => {
+    async function fetchState() {
+        if (!currentRoom) return;
+        const res = await fetch(`/api/state?roomId=${encodeURIComponent(currentRoom)}&playerId=${playerId}`);
+        const state = await res.json();
+        if (state.error) return;
+
         document.getElementById('lbl-room').innerText = state.roomId;
         document.getElementById('lbl-seats').innerText = `${state.players.length}/${state.maxSeats}`;
         document.getElementById('pot').innerText = state.pot;
@@ -174,10 +156,7 @@
         grid.innerHTML = '';
         state.players.forEach(p => {
             const isTurn = (p.id === state.turnId && state.gameActive);
-            let cardsHtml = '';
-            if (p.hand) {
-                cardsHtml = p.hand.map(c => `<div class="mc ${c.isRed ? 'red' : ''}">${c.rank}${c.suit}</div>`).join('');
-            }
+            let cardsHtml = p.hand ? p.hand.map(c => `<div class="mc ${c.isRed ? 'red' : ''}">${c.rank}${c.suit}</div>`).join('') : '';
             grid.innerHTML += `
                 <div class="p-box ${isTurn ? 'active-turn' : ''} ${p.folded ? 'folded' : ''}">
                     <div style="font-weight:bold;">${p.name} ${isTurn ? '⏳' : ''}</div>
@@ -205,17 +184,16 @@
         const isMyTurn = (state.turnId === state.myData.id);
 
         if (!state.gameActive) {
+            ctrl.innerHTML = `<button type="button" class="btn-green" style="grid-column: span 2;" onclick="sendAction('start')" ${state.players.length < 2 ? 'disabled' : ''}>${state.isSvara ? '🔥 Почати СВАРУ (50 фішок)' : 'Почати роздачу (мін. 2 чол.)'}</button>`;
+        } else {
             ctrl.innerHTML = `
-Используйте код с осторожностью.
-<button type="button" class="btn-green" style="grid-column: span 2;" onclick="socket.emit('startRound')" ${state.players.length < 2 ? 'disabled' : ''}>
-${state.isSvara ? '🔥 Почати СВАРУ (50 фішок)' : 'Почати роздачу (мінімум 2 чол.)'}
-
-; } else { ctrl.innerHTML = 
-<button type="button" class="btn-purple" onclick="socket.emit('bet', {isDarkBet: true})" ${!isMyTurn || !state.myData.isDark ? 'disabled' : ''}>В темну (+50)
-<button type="button" class="btn-blue" onclick="socket.emit('lookCards')" ${!state.myData.isDark ? 'disabled' : ''}>Дивитись карти
-<button type="button" class="btn-green" onclick="socket.emit('bet', {isDarkBet: false})" ${!isMyTurn ? 'disabled' : ''}>Підняти (+100)
-<button type="button" class="btn-orange" onclick="socket.emit('showdown')" ${!isMyTurn ? 'disabled' : ''}>Відкритись (50)
-<button type="button" class="btn-red" style="grid-column: span 2;" onclick="socket.emit('fold')" ${!isMyTurn ? 'disabled' : ''}>Впасти ❌
+                <button type="button" class="btn-purple" onclick="sendAction('bet', true)" ${!isMyTurn || !state.myData.isDark ? 'disabled' : ''}>В темну (+50)</button>
+                <button type="button" class="btn-blue" onclick="sendAction('look')" ${!state.myData.isDark ? 'disabled' : ''}>Дивитись карти</button>
+                <button type="button" class="btn-green" onclick="sendAction('bet', false)" ${!isMyTurn ? 'disabled' : ''}>Підняти (+100)</button>
+                <button type="button" class="btn-orange" onclick="sendAction('showdown')" ${!isMyTurn ? 'disabled' : ''}>Відкритись (50)</button>
+<button type="button" class="btn-red" style="grid-column: span 2;" onclick="sendAction('fold')" ${!isMyTurn ? 'disabled' : ''}>Впасти ❌
 `;
 }
-});
+}
+
+
