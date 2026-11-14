@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Тринька Онлайн — Мультиплеер</title>
+    <script src="https://telegram.org"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            background: #123329; color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0; padding: 12px; display: flex; flex-direction: column;
+            justify-content: space-between; height: 100vh; box-sizing: border-box; user-select: none;
+        }
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(0,0,0,0.45); padding: 8px 12px; border-radius: 10px; font-size: 13px; font-weight: bold;
+        }
+        .lobby { margin: auto 0; text-align: center; }
+        .lobby input, .lobby select {
+            width: 85%; max-width: 280px; padding: 12px; margin: 8px 0;
+            border-radius: 10px; border: none; font-size: 15px; text-align: center;
+        }
+        .game { display: none; flex-direction: column; justify-content: space-between; height: 100%; }
+        .players-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(95px, 1fr));
+            gap: 6px; max-height: 36vh; overflow-y: auto; margin: 6px 0;
+        }
+        .p-box {
+            background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px; padding: 6px; text-align: center; font-size: 11px;
+        }
+        .p-box.active-turn { border: 2px solid #2ecc71; box-shadow: 0 0 8px #2ecc71; }
+        .p-box.folded { opacity: 0.45; }
+        .mini-cards { display: flex; justify-content: center; gap: 3px; margin-top: 4px; }
+        .mc { background: #fff; color: #000; border-radius: 3px; padding: 1px 3px; font-weight: bold; font-size: 10px; }
+        .mc.red { color: #d32f2f; }
+        .pot-box {
+            background: rgba(0,0,0,0.3); border: 1px solid rgba(255,215,0,0.4);
+            border-radius: 12px; padding: 8px; text-align: center;
+        }
+        .pot { font-size: 20px; font-weight: bold; color: #ffd700; }
+        .status { background: rgba(0,0,0,0.5); padding: 8px; border-radius: 8px; font-size: 12px; text-align: center; }
+        .cards-row { display: flex; justify-content: center; gap: 8px; margin: 6px 0; }
+        .card {
+            width: 64px; height: 92px; background: #fff; color: #000; border-radius: 7px;
+            display: flex; flex-direction: column; justify-content: space-between;
+            padding: 5px; box-sizing: border-box; font-size: 16px; font-weight: bold;
+        }
+        .card.red { color: #d32f2f; }
+        .card.joker { border: 2px solid #ffd700; background: #fffdf0; }
+        .card.hidden { background: repeating-linear-gradient(45deg, #244761, #244761 8px, #3b3259 8px, #3b3259 16px); color: transparent; }
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        button { padding: 12px 8px; border: none; border-radius: 9px; font-size: 13px; font-weight: bold; cursor: pointer; color: #fff; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-green { background: #2ecc71; }
+        .btn-purple { background: #8e44ad; }
+        .btn-blue { background: #2980b9; }
+        .btn-orange { background: #f39c12; }
+        .btn-red { background: #e74c3c; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div id="my-name">Игрок</div>
+    <div style="font-size:11px; color:#bdc3c7;">Касса 3%: <span id="admin-rake">0</span></div>
+    <div>Фишки: <span id="my-balance">1000</span></div>
+</div>
+
+<!-- ЛОББИ ВХОДА ЗА СТОЛ -->
+<div class="lobby" id="lobby">
+    <h2>Тринька Онлайн (Live)</h2>
+    <p style="font-size:13px; color:#bdc3c7;">Введи номер стола, чтобы сесть с друзьями</p>
+    <input type="text" id="room-input" placeholder="Номер стола (например: 777)" value="777">
+    <select id="seats-select">
+        <option value="2">Стол на 2 игроков</option>
+        <option value="4">Стол на 4 игроков</option>
+        <option value="6" selected>Стол на 6 игроков</option>
+        <option value="9">Стол на 9 игроков</option>
+        <option value="12">Стол на 12 игроков</option>
+    </select>
+    <br>
+    <button class="btn-green" style="width:85%; max-width:280px; margin-top:10px;" onclick="joinTable()">Сесть за стол</button>
+</div>
+
+<!-- ИГРОВОЙ СТОЛ -->
+<div class="game" id="game">
+    <div style="font-size:12px; color:#bdc3c7; text-align:center;">
+        Стол #<b id="lbl-room"></b> • Мест: <b id="lbl-seats"></b>
+    </div>
+
+    <div class="players-grid" id="players-grid"></div>
+
+    <div class="pot-box">
+        <div class="pot">Банк: <span id="pot">0</span> фишек</div>
+        <div style="font-size:11px; color:#a3c2b8;">Комиссия стола: 3% от банка</div>
+    </div>
+
+    <div class="status" id="status">Ожидание игроков...</div>
+
+    <div style="text-align:center;">
+        <div style="font-size:12px;">Ваши карты (Очки: <b id="my-score">?</b>)</div>
+        <div class="cards-row" id="my-cards"></div>
+    </div>
+
+    <div class="controls" id="controls"></div>
+</div>
+
+<script>
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+    const userName = tg.initDataUnsafe?.user?.first_name || 'Игрок_' + Math.floor(Math.random()*999);
+    document.getElementById('my-name').innerText = userName;
+
+    const socket = io();
+
+    function joinTable() {
+        const roomId = document.getElementById('room-input').value.trim() || '777';
+        const maxSeats = document.getElementById('seats-select').value;
+        socket.emit('joinRoom', { roomId, maxSeats, userName });
+        document.getElementById('lobby').style.display = 'none';
+        document.getElementById('game').style.display = 'flex';
+    }
+
+    socket.on('errorMsg', (msg) => alert(msg));
+
+    socket.on('stateUpdate', (state) => {
+        document.getElementById('lbl-room').innerText = state.roomId;
+        document.getElementById('lbl-seats').innerText = `${state.players.length}/${state.maxSeats}`;
+        document.getElementById('pot').innerText = state.pot;
+        document.getElementById('status').innerText = state.message;
+        document.getElementById('my-balance').innerText = state.myData.balance;
+        document.getElementById('admin-rake').innerText = state.adminRake;
+        document.getElementById('my-score').innerText = state.myData.score !== null ? state.myData.score : '? (В темную)';
+
+        const grid = document.getElementById('players-grid');
+        grid.innerHTML = '';
+        state.players.forEach(p => {
+            const isTurn = (p.id === state.turnId && state.gameActive);
+            let cardsHtml = '';
+            if (p.hand) {
+                cardsHtml = p.hand.map(c => `<div class="mc ${c.isRed ? 'red' : ''}">${c.rank}${c.suit}</div>`).join('');
+            }
+            grid.innerHTML += `
+                <div class="p-box ${isTurn ? 'active-turn' : ''} ${p.folded ? 'folded' : ''}">
+                    <div style="font-weight:bold;">${p.name} ${isTurn ? '⏳' : ''}</div>
+                    <div style="color:#f1c40f;">${p.score !== null && !p.folded ? p.score + ' очк.' : p.status}</div>
+                    <div style="color:#bdc3c7;">${p.balance} фишек</div>
+                    <div class="mini-cards">${cardsHtml}</div>
+                </div>
+            `;
+        });
+
+        const myCardsEl = document.getElementById('my-cards');
+        myCardsEl.innerHTML = '';
+        (state.myData.hand || []).forEach(c => {
+            const div = document.createElement('div');
+            if (state.myData.isDark && !state.reveal) {
+                div.className = 'card hidden';
+            } else {
+                div.className = `card ${c.isRed ? 'red' : ''} ${c.isJoker ? 'joker' : ''}`;
+                div.innerHTML = `<div>${c.rank}${c.suit}</div><div style="text-align:right">${c.rank}${c.suit}</div>`;
+            }
+            myCardsEl.appendChild(div);
+        });
+
+        const ctrl = document.getElementById('controls');
+        const isMyTurn = (state.turnId === state.myData.id);
+
+        if (!state.gameActive) {
+            ctrl.innerHTML = `
+                <button class="btn-green" style="grid-column: span 2;" onclick="socket.emit('startRound')" ${state.players.length < 2 ? 'disabled' : ''}>
+                    ${state.isSvara ? '🔥 Начать СВАРУ (50 фишек)' : 'Начать раздачу (минимум 2 чел.)'}
+                </button>
+            `;
+        } else {
+            ctrl.innerHTML = `
+                <button class="btn-purple" onclick="socket.emit('bet', {isDarkBet: true})" ${!isMyTurn || !state.myData.isDark ? 'disabled' : ''}>В темную (+50)</button>
+                <button class="btn-blue" onclick="socket.emit('lookCards')" ${!state.myData.isDark ? 'disabled' : ''}>Смотреть карты</button>
+                <button class="btn-green" onclick="socket.emit('bet', {isDarkBet: false})" ${!isMyTurn ? 'disabled' : ''}>Поднять (+100)</button>
+                <button class="btn-orange" onclick="socket.emit('showdown')" ${!isMyTurn ? 'disabled' : ''}>Вскрыться (50)</button>
+                <button class="btn-red" style="grid-column: span 2;" onclick="socket.emit('fold')" ${!isMyTurn ? 'disabled' : ''}>Упасть ❌</button>
+            `;
+        }
+    });
+</script>
+</body>
+</html>
