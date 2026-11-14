@@ -34,9 +34,10 @@
         .btn-blue { background: #2980b9; }
         .btn-orange { background: #f39c12; }
         .btn-red { background: #e74c3c; }
-        .admin-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92); z-index: 999; padding: 15px; box-sizing: border-box; overflow-y: auto; }
-        .admin-row { display: flex; justify-content: space-between; align-items: center; background: #1e272e; padding: 8px; border-radius: 8px; margin-bottom: 6px; font-size: 12px; }
-        .adm-btn { padding: 6px 8px; font-size: 11px; margin-left: 3px; border-radius: 6px; }
+        .admin-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.94); z-index: 999; padding: 15px; box-sizing: border-box; overflow-y: auto; }
+        .admin-card { background: #1e272e; padding: 10px; border-radius: 10px; margin-bottom: 10px; font-size: 13px; border: 1px solid #34495e; }
+        .adm-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 6px; }
+        .adm-btn { padding: 7px 2px; font-size: 11px; border-radius: 6px; text-align: center; }
     </style>
 </head>
 <body>
@@ -77,11 +78,11 @@
 <div class="admin-modal" id="admin-modal">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
         <h3 style="margin:0; color:#ffd700;">👑 Адмін-панель</h3>
-        <button class="btn-red adm-btn" onclick="document.getElementById('admin-modal').style.display='none'">Закрити ✖</button>
+        <button class="btn-red" style="padding:6px 10px; font-size:12px;" onclick="document.getElementById('admin-modal').style.display='none'">Закрити ✖</button>
     </div>
     <div style="background:#2f3640; padding:10px; border-radius:8px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
         <span>Накопичено комісії (3%): <b id="adm-rake-val" style="color:#ffd700;">0</b></span>
-        <button class="btn-orange adm-btn" onclick="resetRake()">Зняти касу</button>
+        <button class="btn-orange" style="padding:6px 10px; font-size:12px;" onclick="resetRake()">Зняти касу</button>
     </div>
     <div id="admin-users-list"></div>
 </div>
@@ -137,13 +138,23 @@
     function renderAdmin(d) {
         document.getElementById('adm-rake-val').innerText = d.adminRake;
         document.getElementById('admin-rake').innerText = d.adminRake;
+        var nums =;
         var html = '';
         for (var i = 0; i < d.users.length; i++) {
             var u = d.users[i];
-            html += '<div class="admin-row"><div><b>' + u.name + '</b><br><span style="color:#aaa;">Баланс: ' + u.balance + '</span></div>' +
-                '<div><button class="btn-green adm-btn" onclick="admDelta(\'' + u.id + '\', 500)">+500</button>' +
-                '<button class="btn-green adm-btn" onclick="admDelta(\'' + u.id + '\', 1000)">+1000</button>' +
-                '<button class="btn-red adm-btn" onclick="admDelta(\'' + u.id + '\', -500)">-500</button></div></div>';
+            if (u.id === playerId) document.getElementById('my-balance').innerText = u.balance;
+            var plusBtns = '';
+            var minusBtns = '';
+            for (var n = 0; n < nums.length; n++) {
+                var val = nums[n];
+                plusBtns += '<button class="btn-green adm-btn" onclick="admDelta(\'' + u.id + '\',' + val + ')">+' + val + '</button>';
+                minusBtns += '<button class="btn-red adm-btn" onclick="admDelta(\'' + u.id + '\',-' + val + ')">-' + val + '</button>';
+            }
+            html += '<div class="admin-card">' +
+                '<div style="display:flex; justify-content:space-between;"><b>' + u.name + '</b><span style="color:#ffd700; font-weight:bold;">Баланс: ' + u.balance + '</span></div>' +
+                '<div class="adm-grid">' + plusBtns + '</div>' +
+                '<div class="adm-grid">' + minusBtns + '</div>' +
+                '</div>';
         }
         document.getElementById('admin-users-list').innerHTML = html || '<p>Поки немає гравців</p>';
     }
@@ -159,7 +170,6 @@
         .then(function(r) { return r.json(); })
         .then(function(d) { renderAdmin(d); });
     }
-
     var currentRoom = '';
     var pollTimer = null;
 
