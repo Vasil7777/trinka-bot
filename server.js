@@ -21,8 +21,8 @@ const RANKS = [
     { name: 'Д', val: 10 }, { name: 'К', val: 10 }, { name: 'Т', val: 11 }
 ];
 
-const RAKE_PERCENT = 0.03; // Комісія столу 3%
-let adminRakeBalance = 0;  // Загальна каса комісії
+const RAKE_PERCENT = 0.03;
+let adminRakeBalance = 0;
 
 const rooms = {};
 
@@ -46,7 +46,9 @@ function calculateScore(hand) {
     let normals = hand.filter(c => !c.isJoker);
 
     if (jokers.length === 1 && normals.length === 2) {
-        if (normals[0].rank === normals[1].rank) return normals[0].rank === 'Т' ? 33 : 30 + normals[0].val;
+        if (normals[0].rank === normals[1].rank) {
+            return normals[0].rank === 'Т' ? 33 : 30 + normals[0].val;
+        }
     } else if (normals.length === 3) {
         if (normals[0].rank === normals[1].rank && normals[1].rank === normals[2].rank) {
             return normals[0].rank === 'Т' ? 33 : 30 + normals[0].val;
