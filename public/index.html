@@ -1,57 +1,33 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="uk" translate="no">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Трінька Онлайн</title>
     <script src="https://telegram.org"></script>
     <style>
-        body {
-            background: #123329; color: #fff;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            margin: 0; padding: 12px; display: flex; flex-direction: column;
-            justify-content: space-between; height: 100vh; box-sizing: border-box; user-select: none;
-        }
-        .header {
-            display: flex; justify-content: space-between; align-items: center;
-            background: rgba(0,0,0,0.45); padding: 8px 12px; border-radius: 10px; font-size: 13px; font-weight: bold;
-        }
+        body { background: #123329; color: #fff; font-family: sans-serif; margin: 0; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; height: 100vh; box-sizing: border-box; }
+        .header { display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.45); padding: 8px 12px; border-radius: 10px; font-size: 13px; font-weight: bold; }
         .lobby { margin: auto 0; text-align: center; }
-        .lobby input, .lobby select {
-            width: 85%; max-width: 280px; padding: 12px; margin: 8px 0;
-            border-radius: 10px; border: none; font-size: 15px; text-align: center;
-        }
+        .lobby input, .lobby select { width: 85%; max-width: 280px; padding: 12px; margin: 8px 0; border-radius: 10px; border: none; font-size: 15px; text-align: center; }
         .game { display: none; flex-direction: column; justify-content: space-between; height: 100%; }
-        .players-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(95px, 1fr));
-            gap: 6px; max-height: 36vh; overflow-y: auto; margin: 6px 0;
-        }
-        .p-box {
-            background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.15);
-            border-radius: 8px; padding: 6px; text-align: center; font-size: 11px;
-        }
+        .players-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(95px, 1fr)); gap: 6px; max-height: 36vh; overflow-y: auto; margin: 6px 0; }
+        .p-box { background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 6px; text-align: center; font-size: 11px; }
         .p-box.active-turn { border: 2px solid #2ecc71; }
         .p-box.folded { opacity: 0.45; }
         .mini-cards { display: flex; justify-content: center; gap: 3px; margin-top: 4px; }
         .mc { background: #fff; color: #000; border-radius: 3px; padding: 1px 3px; font-weight: bold; font-size: 10px; }
         .mc.red { color: #d32f2f; }
-        .pot-box {
-            background: rgba(0,0,0,0.3); border: 1px solid rgba(255,215,0,0.4);
-            border-radius: 12px; padding: 8px; text-align: center;
-        }
+        .pot-box { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,215,0,0.4); border-radius: 12px; padding: 8px; text-align: center; }
         .pot { font-size: 20px; font-weight: bold; color: #ffd700; }
         .status { background: rgba(0,0,0,0.5); padding: 8px; border-radius: 8px; font-size: 12px; text-align: center; }
         .cards-row { display: flex; justify-content: center; gap: 8px; margin: 6px 0; }
-        .card {
-            width: 64px; height: 92px; background: #fff; color: #000; border-radius: 7px;
-            display: flex; flex-direction: column; justify-content: space-between;
-            padding: 5px; box-sizing: border-box; font-size: 16px; font-weight: bold;
-        }
+        .card { width: 64px; height: 92px; background: #fff; color: #000; border-radius: 7px; display: flex; flex-direction: column; justify-content: space-between; padding: 5px; box-sizing: border-box; font-size: 16px; font-weight: bold; }
         .card.red { color: #d32f2f; }
         .card.joker { border: 2px solid #ffd700; background: #fffdf0; }
-        .card.hidden { background: repeating-linear-gradient(45deg, #244761, #244761 8px, #3b3259 8px, #3b3259 16px); color: transparent; }
+        .card.hidden { background: #2b4c65; color: transparent; }
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-        button { padding: 12px 8px; border: none; border-radius: 9px; font-size: 14px; font-weight: bold; cursor: pointer; color: #fff; }
+        button { padding: 12px 8px; border: none; border-radius: 9px; font-size: 14px; font-weight: bold; color: #fff; }
         button:disabled { opacity: 0.4; }
         .btn-green { background: #2ecc71; }
         .btn-purple { background: #8e44ad; }
@@ -61,13 +37,11 @@
     </style>
 </head>
 <body>
-
 <div class="header">
-    <div>🟢 <span id="my-name">Гравець</span></div>
+    <div>🟢 <span id="my-name">Завантаження...</span></div>
     <div style="font-size:11px; color:#bdc3c7;">Каса 3%: <span id="admin-rake">0</span></div>
     <div>Фішки: <span id="my-balance">1000</span></div>
 </div>
-
 <div class="lobby" id="lobby">
     <h2>Трінька Онлайн (Live)</h2>
     <p style="font-size:13px; color:#bdc3c7;">Введи номер столу, щоб сісти з друзями</p>
@@ -80,13 +54,10 @@
         <option value="12">Стіл на 12 гравців</option>
     </select>
     <br>
-    <button type="button" class="btn-green" style="width:85%; max-width:280px; margin-top:10px;" onclick="joinTable()">Сісти за стіл</button>
+    <button type="button" class="btn-green" id="btn-sit" style="width:85%; max-width:280px; margin-top:10px;">Сісти за стіл</button>
 </div>
-
 <div class="game" id="game">
-    <div style="font-size:12px; color:#bdc3c7; text-align:center;">
-        Стіл #<b id="lbl-room"></b> • Місць: <b id="lbl-seats"></b>
-    </div>
+    <div style="font-size:12px; color:#bdc3c7; text-align:center;">Стіл #<b id="lbl-room"></b> • Місць: <b id="lbl-seats"></b></div>
     <div class="players-grid" id="players-grid"></div>
     <div class="pot-box">
         <div class="pot">Банк: <span id="pot">0</span> фішок</div>
@@ -99,101 +70,77 @@
     </div>
     <div class="controls" id="controls"></div>
 </div>
-
 <script>
-    const tg = window.Telegram?.WebApp;
+    var tg = window.Telegram ? window.Telegram.WebApp : null;
     if (tg) { tg.ready(); tg.expand(); }
-
-    const playerId = 'p_' + Math.random().toString(36).substr(2, 9);
-    const userName = tg?.initDataUnsafe?.user?.first_name || 'Гравець_' + Math.floor(Math.random()*999);
+    var playerId = 'p_' + Math.random().toString(36).slice(2, 10);
+    var userName = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.first_name) ? tg.initDataUnsafe.user.first_name : 'Гравець_' + Math.floor(Math.random() * 999);
     document.getElementById('my-name').innerText = userName;
+    var currentRoom = '';
+    var pollTimer = null;
 
-    let currentRoom = '';
-    let pollTimer = null;
-
-    async function joinTable() {
+    document.getElementById('btn-sit').onclick = function() {
         currentRoom = document.getElementById('room-input').value.trim() || '777';
-        const maxSeats = document.getElementById('seats-select').value;
-
-        const res = await fetch('/api/join', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ roomId: currentRoom, maxSeats, playerId, userName })
-        });
-        const data = await res.json();
-        if (data.error) { alert(data.error); return; }
-
+        var maxSeats = document.getElementById('seats-select').value;
+        document.getElementById('lbl-room').innerText = currentRoom;
+        document.getElementById('lbl-seats').innerText = '1/' + maxSeats;
         document.getElementById('lobby').style.display = 'none';
         document.getElementById('game').style.display = 'flex';
-        fetchState();
-        pollTimer = setInterval(fetchState, 1000);
-    }
-
-    async function sendAction(action, isDarkBet = false) {
-        await fetch('/api/action', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ roomId: currentRoom, playerId, action, isDarkBet })
+        fetch('/api/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roomId: currentRoom, maxSeats: maxSeats, playerId: playerId, userName: userName }) })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) { alert(data.error); document.getElementById('game').style.display = 'none'; document.getElementById('lobby').style.display = 'block'; return; }
+            fetchState();
+            if (!pollTimer) pollTimer = setInterval(fetchState, 1000);
         });
-        fetchState();
+    };
+
+    function sendAction(action, isDarkBet) {
+        fetch('/api/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roomId: currentRoom, playerId: playerId, action: action, isDarkBet: !!isDarkBet }) }).then(function() { fetchState(); });
     }
 
-    async function fetchState() {
+    function fetchState() {
         if (!currentRoom) return;
-        const res = await fetch(`/api/state?roomId=${encodeURIComponent(currentRoom)}&playerId=${playerId}`);
-        const state = await res.json();
-        if (state.error) return;
-
-        document.getElementById('lbl-room').innerText = state.roomId;
-        document.getElementById('lbl-seats').innerText = `${state.players.length}/${state.maxSeats}`;
-        document.getElementById('pot').innerText = state.pot;
-        document.getElementById('status').innerText = state.message;
-        document.getElementById('my-balance').innerText = state.myData.balance;
-        document.getElementById('admin-rake').innerText = state.adminRake;
-        document.getElementById('my-score').innerText = state.myData.score !== null ? state.myData.score : '? (В темну)';
-
-        const grid = document.getElementById('players-grid');
-        grid.innerHTML = '';
-        state.players.forEach(p => {
-            const isTurn = (p.id === state.turnId && state.gameActive);
-            let cardsHtml = p.hand ? p.hand.map(c => `<div class="mc ${c.isRed ? 'red' : ''}">${c.rank}${c.suit}</div>`).join('') : '';
-            grid.innerHTML += `
-                <div class="p-box ${isTurn ? 'active-turn' : ''} ${p.folded ? 'folded' : ''}">
-                    <div style="font-weight:bold;">${p.name} ${isTurn ? '⏳' : ''}</div>
-                    <div style="color:#f1c40f;">${p.score !== null && !p.folded ? p.score + ' очк.' : p.status}</div>
-                    <div style="color:#bdc3c7;">${p.balance} фішок</div>
-                    <div class="mini-cards">${cardsHtml}</div>
-                </div>
-            `;
-        });
-
-        const myCardsEl = document.getElementById('my-cards');
-        myCardsEl.innerHTML = '';
-        (state.myData.hand || []).forEach(c => {
-            const div = document.createElement('div');
-            if (state.myData.isDark && !state.reveal) {
-                div.className = 'card hidden';
-            } else {
-                div.className = `card ${c.isRed ? 'red' : ''} ${c.isJoker ? 'joker' : ''}`;
-                div.innerHTML = `<div>${c.rank}${c.suit}</div><div style="text-align:right">${c.rank}${c.suit}</div>`;
+        fetch('/api/state?roomId=' + encodeURIComponent(currentRoom) + '&playerId=' + encodeURIComponent(playerId))
+        .then(function(r) { return r.json(); })
+        .then(function(state) {
+            if (state.error) return;
+            document.getElementById('lbl-room').innerText = state.roomId;
+            document.getElementById('lbl-seats').innerText = state.players.length + '/' + state.maxSeats;
+            document.getElementById('pot').innerText = state.pot;
+            document.getElementById('status').innerText = state.message;
+            document.getElementById('my-balance').innerText = state.myData.balance;
+            document.getElementById('admin-rake').innerText = state.adminRake;
+            document.getElementById('my-score').innerText = (state.myData.score !== null) ? state.myData.score : '? (В темну)';
+            var grid = document.getElementById('players-grid');
+            var gridHtml = '';
+            for (var i = 0; i < state.players.length; i++) {
+                var p = state.players[i];
+                var isTurn = (p.id === state.turnId && state.gameActive);
+                var cardsHtml = '';
+                if (p.hand) { for (var j = 0; j < p.hand.length; j++) { var c = p.hand[j]; cardsHtml += '<div class="mc ' + (c.isRed ? 'red' : '') + '">' + c.rank + c.suit + '</div>'; } }
+                gridHtml += '<div class="p-box ' + (isTurn ? 'active-turn ' : '') + (p.folded ? 'folded' : '') + '"><div style="font-weight:bold;">' + p.name + (isTurn ? ' ⏳' : '') + '</div><div style="color:#f1c40f;">' + ((p.score !== null && !p.folded) ? (p.score + ' очк.') : p.status) + '</div><div style="color:#bdc3c7;">' + p.balance + ' фішок</div><div class="mini-cards">' + cardsHtml + '</div></div>';
             }
-            myCardsEl.appendChild(div);
+            grid.innerHTML = gridHtml;
+            var myCardsEl = document.getElementById('my-cards');
+            myCardsEl.innerHTML = '';
+            var myHand = state.myData.hand || [];
+            for (var k = 0; k < myHand.length; k++) {
+                var mc = myHand[k];
+                var div = document.createElement('div');
+                if (state.myData.isDark && !state.reveal) { div.className = 'card hidden'; }
+                else { div.className = 'card' + (mc.isRed ? ' red' : '') + (mc.isJoker ? ' joker' : ''); div.innerHTML = '<div>' + mc.rank + mc.suit + '</div><div style="text-align:right">' + mc.rank + mc.suit + '</div>'; }
+                myCardsEl.appendChild(div);
+            }
+            var ctrl = document.getElementById('controls');
+            var isMyTurn = (state.turnId === state.myData.id);
+            if (!state.gameActive) {
+                ctrl.innerHTML = '<button type="button" class="btn-green" style="grid-column: span 2;" onclick="sendAction(\'start\')" ' + (state.players.length < 2 ? 'disabled' : '') + '>' + (state.isSvara ? '🔥 Почати СВАРУ (50 фішок)' : 'Почати роздачу (мін. 2 чол.)') + '</button>';
+            } else {
+                ctrl.innerHTML = '<button type="button" class="btn-purple" onclick="sendAction(\'bet\', true)" ' + ((!isMyTurn || !state.myData.isDark) ? 'disabled' : '') + '>В темну (+50)</button><button type="button" class="btn-blue" onclick="sendAction(\'look\')" ' + (!state.myData.isDark ? 'disabled' : '') + '>Дивитись карти</button><button type="button" class="btn-green" onclick="sendAction(\'bet\', false)" ' + (!isMyTurn ? 'disabled' : '') + '>Підняти (+100)</button><button type="button" class="btn-orange" onclick="sendAction(\'showdown\')" ' + (!isMyTurn ? 'disabled' : '') + '>Відкритись (50)</button><button type="button" class="btn-red" style="grid-column: span 2;" onclick="sendAction(\'fold\')" ' + (!isMyTurn ? 'disabled' : '') + '>Впасти ❌</button>';
+            }
         });
-
-        const ctrl = document.getElementById('controls');
-        const isMyTurn = (state.turnId === state.myData.id);
-
-        if (!state.gameActive) {
-            ctrl.innerHTML = `<button type="button" class="btn-green" style="grid-column: span 2;" onclick="sendAction('start')" ${state.players.length < 2 ? 'disabled' : ''}>${state.isSvara ? '🔥 Почати СВАРУ (50 фішок)' : 'Почати роздачу (мін. 2 чол.)'}</button>`;
-        } else {
-            ctrl.innerHTML = `
-                <button type="button" class="btn-purple" onclick="sendAction('bet', true)" ${!isMyTurn || !state.myData.isDark ? 'disabled' : ''}>В темну (+50)</button>
-                <button type="button" class="btn-blue" onclick="sendAction('look')" ${!state.myData.isDark ? 'disabled' : ''}>Дивитись карти</button>
-                <button type="button" class="btn-green" onclick="sendAction('bet', false)" ${!isMyTurn ? 'disabled' : ''}>Підняти (+100)</button>
-                <button type="button" class="btn-orange" onclick="sendAction('showdown')" ${!isMyTurn ? 'disabled' : ''}>Відкритись (50)</button>
-<button type="button" class="btn-red" style="grid-column: span 2;" onclick="sendAction('fold')" ${!isMyTurn ? 'disabled' : ''}>Впасти ❌
-`;
-}
-}
-
-
+    }
+</script>
+</body>
+</html>
