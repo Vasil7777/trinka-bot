@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Трінька Онлайн — Мультиплеєр</title>
     <script src="https://telegram.org"></script>
-    <script src="https://socket.io"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <style>
         body {
             background: #123329; color: #fff;
@@ -74,7 +74,6 @@
     <div>Фішки: <span id="my-balance">1000</span></div>
 </div>
 
-<!-- ЛОБІ ВХОДУ ЗА СТІЛ -->
 <div class="lobby" id="lobby">
     <h2>Трінька Онлайн (Live)</h2>
     <p style="font-size:13px; color:#bdc3c7;">Введи номер столу, щоб сісти з друзями</p>
@@ -91,7 +90,6 @@
     <div id="conn-text" style="font-size:11px; color:#f1c40f; margin-top:8px;">Підключення до сервера...</div>
 </div>
 
-<!-- ІГРОВИЙ СТІЛ -->
 <div class="game" id="game">
     <div style="font-size:12px; color:#bdc3c7; text-align:center;">
         Стіл #<b id="lbl-room"></b> • Місць: <b id="lbl-seats"></b>
@@ -123,7 +121,9 @@
     const userName = tg?.initDataUnsafe?.user?.first_name || 'Гравець_' + Math.floor(Math.random()*999);
     document.getElementById('my-name').innerText = userName;
 
-    const socket = io({ transports: ['websocket', 'polling'] });
+    const socket = io('https://onrender.com', {
+        transports: ['polling', 'websocket']
+    });
 
     socket.on('connect', () => {
         document.getElementById('conn-dot').classList.add('online');
@@ -131,13 +131,16 @@
         document.getElementById('conn-text').style.color = '#2ecc71';
     });
 
-    socket.on('disconnect', () => {
-        document.getElementById('conn-dot').classList.remove('online');
-        document.getElementById('conn-text').innerText = 'Перепідключення...';
+    socket.on('connect_error', (err) => {
+        document.getElementById('conn-text').innerText = 'Помилка: ' + err.message;
         document.getElementById('conn-text').style.color = '#e74c3c';
     });
 
     document.getElementById('join-btn').addEventListener('click', () => {
+        if (!socket.connected) {
+            alert('Зачекайте зеленого індикатора підключення до сервера!');
+            return;
+        }
         const roomId = document.getElementById('room-input').value.trim() || '777';
         const maxSeats = document.getElementById('seats-select').value;
         
@@ -201,6 +204,14 @@
         if (!state.gameActive) {
             ctrl.innerHTML = `
                 <button type="button" class="btn-green" style="grid-column: span 2;" onclick="socket.emit('startRound')" ${state.players.length < 2 ? 'disabled' : ''}>
-                    ${state.isSvara ? '🔥 Почати СВАРУ (50 фішок)' : 'Почати роздачу (мінімум 2 чол.)'}
-                </button>
-            `;
+${state.isSvara ? '🔥 Почати СВАРУ (50 фішок)' : 'Почати роздачу (мінімум 2 чол.)'}
+
+; } else { ctrl.innerHTML = 
+<button type="button" class="btn-purple" onclick="socket.emit('bet', {isDarkBet: true})" ${!isMyTurn || !state.myData.isDark ? 'disabled' : ''}>В темну (+50)
+<button type="button" class="btn-blue" onclick="socket.emit('lookCards')" ${!state.myData.isDark ? 'disabled' : ''}>Дивитись карти
+<button type="button" class="btn-green" onclick="socket.emit('bet', {isDarkBet: false})" ${!isMyTurn ? 'disabled' : ''}>Підняти (+100)
+<button type="button" class="btn-orange" onclick="socket.emit('showdown')" ${!isMyTurn ? 'disabled' : ''}>Відкритись (50)
+<button type="button" class="btn-red" style="grid-column: span 2;" onclick="socket.emit('fold')" ${!isMyTurn ? 'disabled' : ''}>Впасти ❌
+`;
+}
+});
