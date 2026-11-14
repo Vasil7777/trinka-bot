@@ -211,14 +211,25 @@
         document.getElementById('btn-sit').click();
     }
 
-    function leaveRoom() {
+        function leaveRoom() {
+        if (currentRoom) {
+            fetch('/api/leave', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roomId: currentRoom, playerId: playerId })
+            }).then(function() { loadRooms(); });
+        }
         currentRoom = '';
         if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
         document.getElementById('game').style.display = 'none';
         document.getElementById('lobby').style.display = 'block';
-        loadRooms();
     }
 
+    window.addEventListener('beforeunload', function() {
+        if (currentRoom) {
+            navigator.sendBeacon('/api/leave', new Blob([JSON.stringify({ roomId: currentRoom, playerId: playerId })], { type: 'application/json' }));
+        }
+    });
     document.getElementById('btn-sit').onclick = function() {
         var iv = document.getElementById('name-input').value.trim();
         if (iv) { userName = iv; localStorage.setItem('trinka_name', userName); }
