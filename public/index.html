@@ -8,8 +8,10 @@
     <style>
         body { background: #123329; color: #fff; font-family: sans-serif; margin: 0; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; height: 100vh; box-sizing: border-box; }
         .header { display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.45); padding: 8px 12px; border-radius: 10px; font-size: 13px; font-weight: bold; }
-        .lobby { margin: auto 0; text-align: center; }
-        .lobby input, .lobby select { width: 85%; max-width: 280px; padding: 12px; margin: 6px 0; border-radius: 10px; border: none; font-size: 15px; text-align: center; }
+        .lobby { margin: auto 0; text-align: center; overflow-y: auto; max-height: 88vh; }
+        .lobby input, .lobby select { width: 85%; max-width: 280px; padding: 10px; margin: 5px 0; border-radius: 10px; border: none; font-size: 14px; text-align: center; }
+        .rooms-box { width: 90%; max-width: 300px; margin: 14px auto 0; text-align: left; }
+        .room-item { display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.38); border: 1px solid rgba(255,255,255,0.15); padding: 8px 10px; border-radius: 9px; margin-bottom: 6px; font-size: 12px; }
         .game { display: none; flex-direction: column; justify-content: space-between; height: 100%; }
         .players-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(95px, 1fr)); gap: 6px; max-height: 36vh; overflow-y: auto; margin: 6px 0; }
         .p-box { background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 6px; text-align: center; font-size: 11px; }
@@ -27,7 +29,7 @@
         .card.joker { border: 2px solid #ffd700; background: #fffdf0; }
         .card.hidden { background: #2b4c65; color: transparent; }
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-        button { padding: 12px 8px; border: none; border-radius: 9px; font-size: 14px; font-weight: bold; color: #fff; }
+        button { padding: 11px 8px; border: none; border-radius: 9px; font-size: 13px; font-weight: bold; color: #fff; }
         button:disabled { opacity: 0.4; }
         .btn-green { background: #2ecc71; }
         .btn-purple { background: #8e44ad; }
@@ -36,7 +38,7 @@
         .btn-red { background: #e74c3c; }
         .admin-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.94); z-index: 999; padding: 15px; box-sizing: border-box; overflow-y: auto; }
         .admin-card { background: #1e272e; padding: 10px; border-radius: 10px; margin-bottom: 10px; font-size: 13px; border: 1px solid #34495e; }
-        .adm-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 6px; }
+        .adm-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 6px; }
         .adm-btn { padding: 7px 2px; font-size: 11px; border-radius: 6px; text-align: center; }
     </style>
 </head>
@@ -47,10 +49,9 @@
     <div>Фішки: <span id="my-balance">1000</span></div>
 </div>
 <div class="lobby" id="lobby">
-    <h2>Трінька Онлайн (Live)</h2>
-    <p style="font-size:13px; color:#bdc3c7;">Введи своє ім'я та номер столу</p>
+    <h2 style="margin:6px 0;">Трінька Онлайн (Live)</h2>
     <input type="text" id="name-input" placeholder="Твоє ім'я">
-    <input type="text" id="room-input" placeholder="Номер столу" value="777">
+    <input type="text" id="room-input" placeholder="Номер нового столу" value="777">
     <select id="seats-select">
         <option value="2">Стіл на 2 гравців</option>
         <option value="4">Стіл на 4 гравців</option>
@@ -59,10 +60,17 @@
         <option value="12">Стіл на 12 гравців</option>
     </select>
     <br>
-    <button type="button" class="btn-green" id="btn-sit" style="width:85%; max-width:280px; margin-top:10px;">Сісти за стіл</button>
+    <button type="button" class="btn-green" id="btn-sit" style="width:85%; max-width:280px; margin-top:6px;">Створити / Сісти за стіл</button>
+    <div class="rooms-box">
+        <div style="font-size:12px; color:#ffd700; font-weight:bold; margin-bottom:6px;">🔥 Відкриті столи зараз:</div>
+        <div id="live-rooms-list"><div style="font-size:12px; color:#bdc3c7;">Поки немає активних столів...</div></div>
+    </div>
 </div>
 <div class="game" id="game">
-    <div style="font-size:12px; color:#bdc3c7; text-align:center;">Стіл #<b id="lbl-room"></b> • Місць: <b id="lbl-seats"></b></div>
+    <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; color:#bdc3c7;">
+        <span>Стіл #<b id="lbl-room"></b> • Місць: <b id="lbl-seats"></b></span>
+        <button class="btn-red" style="padding:4px 8px; font-size:11px;" onclick="leaveRoom()">В лобі ↩</button>
+    </div>
     <div class="players-grid" id="players-grid"></div>
     <div class="pot-box">
         <div class="pot">Банк: <span id="pot">0</span> фішок</div>
@@ -173,6 +181,44 @@
     var currentRoom = '';
     var pollTimer = null;
 
+    function loadRooms() {
+        if (currentRoom) return;
+        fetch('/api/rooms')
+        .then(function(r) { return r.json(); })
+        .then(function(list) {
+            var box = document.getElementById('live-rooms-list');
+            if (!list || list.length === 0) {
+                box.innerHTML = '<div style="font-size:12px; color:#bdc3c7;">Поки немає активних столів. Створи свій!</div>';
+                return;
+            }
+            var h = '';
+            for (var i = 0; i < list.length; i++) {
+                var rm = list.at(i);
+                var st = rm.gameActive ? '🎲 Йде гра' : '⏳ Очікування';
+                var full = (rm.count >= rm.maxSeats);
+                h += '<div class="room-item"><div><b>Стіл #' + rm.id + '</b> (' + rm.count + '/' + rm.maxSeats + ')<br><span style="color:#bdc3c7; font-size:11px;">' + st + ' • Банк: ' + rm.pot + '</span></div>' +
+                    '<button class="btn-green" style="padding:7px 12px; font-size:12px;" onclick="quickJoin(\'' + rm.id + '\',' + rm.maxSeats + ')" ' + (full ? 'disabled' : '') + '>' + (full ? 'Повний' : 'Увійти') + '</button></div>';
+            }
+            box.innerHTML = h;
+        });
+    }
+    loadRooms();
+    setInterval(loadRooms, 2500);
+
+    function quickJoin(rId, mSeats) {
+        document.getElementById('room-input').value = rId;
+        document.getElementById('seats-select').value = mSeats;
+        document.getElementById('btn-sit').click();
+    }
+
+    function leaveRoom() {
+        currentRoom = '';
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        document.getElementById('game').style.display = 'none';
+        document.getElementById('lobby').style.display = 'block';
+        loadRooms();
+    }
+
     document.getElementById('btn-sit').onclick = function() {
         var iv = document.getElementById('name-input').value.trim();
         if (iv) { userName = iv; localStorage.setItem('trinka_name', userName); }
@@ -187,7 +233,7 @@
         fetch('/api/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roomId: currentRoom, maxSeats: maxSeats, playerId: playerId, userName: userName }) })
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            if (data.error) { alert(data.error); document.getElementById('game').style.display = 'none'; document.getElementById('lobby').style.display = 'block'; return; }
+            if (data.error) { alert(data.error); leaveRoom(); return; }
             fetchState();
             if (!pollTimer) pollTimer = setInterval(fetchState, 1000);
         });
