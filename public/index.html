@@ -9,7 +9,7 @@
         body { background: #123329; color: #fff; font-family: sans-serif; margin: 0; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; height: 100vh; box-sizing: border-box; }
         .header { display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.45); padding: 8px 12px; border-radius: 10px; font-size: 13px; font-weight: bold; }
         .lobby { margin: auto 0; text-align: center; }
-        .lobby input, .lobby select { width: 85%; max-width: 280px; padding: 12px; margin: 8px 0; border-radius: 10px; border: none; font-size: 15px; text-align: center; }
+        .lobby input, .lobby select { width: 85%; max-width: 280px; padding: 12px; margin: 6px 0; border-radius: 10px; border: none; font-size: 15px; text-align: center; }
         .game { display: none; flex-direction: column; justify-content: space-between; height: 100%; }
         .players-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(95px, 1fr)); gap: 6px; max-height: 36vh; overflow-y: auto; margin: 6px 0; }
         .p-box { background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 6px; text-align: center; font-size: 11px; }
@@ -38,14 +38,15 @@
 </head>
 <body>
 <div class="header">
-    <div>🟢 <span id="my-name">Завантаження...</span></div>
+    <div>🟢 <span id="my-name">Гравець</span></div>
     <div style="font-size:11px; color:#bdc3c7;">Каса 3%: <span id="admin-rake">0</span></div>
     <div>Фішки: <span id="my-balance">1000</span></div>
 </div>
 <div class="lobby" id="lobby">
     <h2>Трінька Онлайн (Live)</h2>
-    <p style="font-size:13px; color:#bdc3c7;">Введи номер столу, щоб сісти з друзями</p>
-    <input type="text" id="room-input" value="777">
+    <p style="font-size:13px; color:#bdc3c7;">Введи своє ім'я та номер столу</p>
+    <input type="text" id="name-input" placeholder="Твоє ім'я (наприклад: Василь)">
+    <input type="text" id="room-input" placeholder="Номер столу" value="777">
     <select id="seats-select">
         <option value="2">Стіл на 2 гравців</option>
         <option value="4">Стіл на 4 гравців</option>
@@ -74,27 +75,63 @@
     var tg = window.Telegram ? window.Telegram.WebApp : null;
     if (tg) { tg.ready(); tg.expand(); }
 
-    var playerId = 'p_' + Math.random().toString(36).slice(2, 10);
-    var userName = 'Гість_' + Math.floor(Math.random() * 999);
+    var savedId = localStorage.getItem('trinka_pid');
+    if (!savedId) {
+        savedId = 'p_' + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem('trinka_pid', savedId);
+    }
+    var playerId = savedId;
+    var userName = localStorage.getItem('trinka_name') || '';
+
+    function parseInitDataUser() {
+        try {
+            if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+                return tg.initDataUnsafe.user;
+            }
+            if (tg && tg.initData) {
+                var params = new URLSearchParams(tg.initData);
+                var userStr = params.get('user');
+                if (userStr) return JSON.parse(userStr);
+            }
+        } catch (e) {}
+        return null;
+    }
 
     function syncTgUser() {
-        if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
-            var u = tg.initDataUnsafe.user;
+        var u = parseInitDataUser();
+        if (u) {
             playerId = 'tg_' + u.id;
-            userName = u.first_name + (u.last_name ? ' ' + u.last_name : '');
-            if (u.username && !u.first_name) userName = '@' + u.username;
+            localStorage.setItem('trinka_pid', playerId);
+            var tgFullName = (u.first_name || '') + (u.last_name ? ' ' + u.last_name : '');
+            if (!tgFullName.trim() && u.username) tgFullName = '@' + u.username;
+            if (tgFullName.trim()) {
+                userName = tgFullName.trim();
+                localStorage.setItem('trinka_name', userName);
+            }
         }
-        document.getElementById('my-name').innerText = userName;
+        var nameInput = document.getElementById('name-input');
+        if (userName && !nameInput.value) {
+            nameInput.value = userName;
+        }
+        document.getElementById('my-name').innerText = nameInput.value.trim() || userName || 'Гравець';
     }
 
     syncTgUser();
-    setTimeout(syncTgUser, 400);
+    setTimeout(syncTgUser, 500);
 
     var currentRoom = '';
     var pollTimer = null;
 
     document.getElementById('btn-sit').onclick = function() {
-        syncTgUser();
+        var inputVal = document.getElementById('name-input').value.trim();
+        if (inputVal) {
+            userName = inputVal;
+            localStorage.setItem('trinka_name', userName);
+        } else if (!userName) {
+            userName = 'Гравець_' + Math.floor(Math.random() * 999);
+        }
+        document.getElementById('my-name').innerText = userName;
+
         currentRoom = document.getElementById('room-input').value.trim() || '777';
         var maxSeats = document.getElementById('seats-select').value;
         document.getElementById('lbl-room').innerText = currentRoom;
