@@ -315,5 +315,19 @@ app.get('/api/rooms', (req, res) => {
     }));
     res.json(list);
 });
+app.post('/api/leave', (req, res) => {
+    const { roomId, playerId } = req.body;
+    const room = rooms[roomId];
+    if (room) {
+        room.players = room.players.filter(p => p.id !== playerId);
+        if (room.players.length === 0) {
+            delete rooms[roomId];
+        } else {
+            if (room.turnIndex >= room.players.length) room.turnIndex = 0;
+            room.message = 'Один із гравців вийшов зі столу.';
+        }
+    }
+    res.json({ ok: true });
+});
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => console.log(`Server live on ${PORT}`));
