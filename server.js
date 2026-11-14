@@ -4,7 +4,7 @@ const path = require('path');
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-
+app.get('/ping', (req, res) => res.send('OK'));
 const ADMIN_PASS = '7777';
 const RAKE_PERCENT = 0.03;
 
