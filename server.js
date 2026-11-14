@@ -305,6 +305,15 @@ app.post('/api/admin/resetRake', (req, res) => {
     adminRakeBalance = 0;
     res.json({ users: Object.values(users), adminRake: adminRakeBalance });
 });
-
+app.get('/api/rooms', (req, res) => {
+    const list = Object.values(rooms).map(r => ({
+        id: r.id,
+        count: r.players.length,
+        maxSeats: r.maxSeats,
+        gameActive: r.gameActive,
+        pot: r.pot
+    }));
+    res.json(list);
+});
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => console.log(`Server live on ${PORT}`));
