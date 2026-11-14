@@ -73,13 +73,28 @@
 <script>
     var tg = window.Telegram ? window.Telegram.WebApp : null;
     if (tg) { tg.ready(); tg.expand(); }
+
     var playerId = 'p_' + Math.random().toString(36).slice(2, 10);
-    var userName = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.first_name) ? tg.initDataUnsafe.user.first_name : 'Гравець_' + Math.floor(Math.random() * 999);
-    document.getElementById('my-name').innerText = userName;
+    var userName = 'Гість_' + Math.floor(Math.random() * 999);
+
+    function syncTgUser() {
+        if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+            var u = tg.initDataUnsafe.user;
+            playerId = 'tg_' + u.id;
+            userName = u.first_name + (u.last_name ? ' ' + u.last_name : '');
+            if (u.username && !u.first_name) userName = '@' + u.username;
+        }
+        document.getElementById('my-name').innerText = userName;
+    }
+
+    syncTgUser();
+    setTimeout(syncTgUser, 400);
+
     var currentRoom = '';
     var pollTimer = null;
 
     document.getElementById('btn-sit').onclick = function() {
+        syncTgUser();
         currentRoom = document.getElementById('room-input').value.trim() || '777';
         var maxSeats = document.getElementById('seats-select').value;
         document.getElementById('lbl-room').innerText = currentRoom;
