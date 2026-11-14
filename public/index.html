@@ -138,15 +138,15 @@
     function renderAdmin(d) {
         document.getElementById('adm-rake-val').innerText = d.adminRake;
         document.getElementById('admin-rake').innerText = d.adminRake;
-        var nums =;
+        var nums = new Array(100, 200, 300, 400, 2000);
         var html = '';
         for (var i = 0; i < d.users.length; i++) {
-            var u = d.users[i];
+            var u = d.users.at(i);
             if (u.id === playerId) document.getElementById('my-balance').innerText = u.balance;
             var plusBtns = '';
             var minusBtns = '';
             for (var n = 0; n < nums.length; n++) {
-                var val = nums[n];
+                var val = nums.at(n);
                 plusBtns += '<button class="btn-green adm-btn" onclick="admDelta(\'' + u.id + '\',' + val + ')">+' + val + '</button>';
                 minusBtns += '<button class="btn-red adm-btn" onclick="admDelta(\'' + u.id + '\',-' + val + ')">-' + val + '</button>';
             }
@@ -213,10 +213,10 @@
             var grid = document.getElementById('players-grid');
             var gridHtml = '';
             for (var i = 0; i < state.players.length; i++) {
-                var p = state.players[i];
+                var p = state.players.at(i);
                 var isTurn = (p.id === state.turnId && state.gameActive);
                 var cardsHtml = '';
-                if (p.hand) { for (var j = 0; j < p.hand.length; j++) { var c = p.hand[j]; cardsHtml += '<div class="mc ' + (c.isRed ? 'red' : '') + '">' + c.rank + c.suit + '</div>'; } }
+                if (p.hand) { for (var j = 0; j < p.hand.length; j++) { var c = p.hand.at(j); cardsHtml += '<div class="mc ' + (c.isRed ? 'red' : '') + '">' + c.rank + c.suit + '</div>'; } }
                 gridHtml += '<div class="p-box ' + (isTurn ? 'active-turn ' : '') + (p.folded ? 'folded' : '') + '"><div style="font-weight:bold;">' + p.name + (isTurn ? ' ⏳' : '') + '</div><div style="color:#f1c40f;">' + ((p.score !== null && !p.folded) ? (p.score + ' очк.') : p.status) + '</div><div style="color:#bdc3c7;">' + p.balance + ' фішок</div><div class="mini-cards">' + cardsHtml + '</div></div>';
             }
             grid.innerHTML = gridHtml;
@@ -224,7 +224,7 @@
             myCardsEl.innerHTML = '';
             var myHand = state.myData.hand || [];
             for (var k = 0; k < myHand.length; k++) {
-                var mc = myHand[k];
+                var mc = myHand.at(k);
                 var div = document.createElement('div');
                 if (state.myData.isDark && !state.reveal) { div.className = 'card hidden'; }
                 else { div.className = 'card' + (mc.isRed ? ' red' : '') + (mc.isJoker ? ' joker' : ''); div.innerHTML = '<div>' + mc.rank + mc.suit + '</div><div style="text-align:right">' + mc.rank + mc.suit + '</div>'; }
