@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Трінька Онлайн — Мультиплеєр</title>
+    <title>Трінька Онлайн</title>
     <script src="https://telegram.org"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
@@ -87,7 +87,7 @@
     </select>
     <br>
     <button type="button" class="btn-green" id="join-btn" style="width:85%; max-width:280px; margin-top:10px;">Сісти за стіл</button>
-    <div id="conn-text" style="font-size:11px; color:#f1c40f; margin-top:8px;">Підключення до сервера...</div>
+    <div id="conn-text" style="font-size:12px; color:#f1c40f; margin-top:8px;">Підключення до сервера...</div>
 </div>
 
 <div class="game" id="game">
@@ -121,9 +121,12 @@
     const userName = tg?.initDataUnsafe?.user?.first_name || 'Гравець_' + Math.floor(Math.random()*999);
     document.getElementById('my-name').innerText = userName;
 
-    const socket = io('https://onrender.com', {
-        transports: ['polling', 'websocket']
-    });
+    if (typeof io === 'undefined') {
+        document.getElementById('conn-text').innerText = 'Помилка: бібліотека io не завантажилась';
+        document.getElementById('conn-text').style.color = '#e74c3c';
+    }
+
+    const socket = io();
 
     socket.on('connect', () => {
         document.getElementById('conn-dot').classList.add('online');
@@ -132,13 +135,13 @@
     });
 
     socket.on('connect_error', (err) => {
-        document.getElementById('conn-text').innerText = 'Помилка: ' + err.message;
+        document.getElementById('conn-text').innerText = 'Помилка з\'єднання: ' + err.message;
         document.getElementById('conn-text').style.color = '#e74c3c';
     });
 
     document.getElementById('join-btn').addEventListener('click', () => {
         if (!socket.connected) {
-            alert('Зачекайте зеленого індикатора підключення до сервера!');
+            alert('Зачекайте зеленого напису "Зв\'язок встановлено ✅"!');
             return;
         }
         const roomId = document.getElementById('room-input').value.trim() || '777';
@@ -203,7 +206,8 @@
 
         if (!state.gameActive) {
             ctrl.innerHTML = `
-                <button type="button" class="btn-green" style="grid-column: span 2;" onclick="socket.emit('startRound')" ${state.players.length < 2 ? 'disabled' : ''}>
+Используйте код с осторожностью.
+<button type="button" class="btn-green" style="grid-column: span 2;" onclick="socket.emit('startRound')" ${state.players.length < 2 ? 'disabled' : ''}>
 ${state.isSvara ? '🔥 Почати СВАРУ (50 фішок)' : 'Почати роздачу (мінімум 2 чол.)'}
 
 ; } else { ctrl.innerHTML = 
