@@ -1,17 +1,9 @@
 const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
 const path = require('path');
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
-});
-
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-
-app.get('/ping', (req, res) => res.send('OK'));
 
 const SUITS = ['♠', '♣', '♥', '♦'];
 const RANKS = [
@@ -44,20 +36,15 @@ function calculateScore(hand) {
     let normals = hand.filter(c => !c.isJoker);
 
     if (jokers.length === 1 && normals.length === 2) {
-        let c1 = normals.at(0);
-        let c2 = normals.at(1);
-        if (c1.rank === c2.rank) return c1.rank === 'Т' ? 33 : 30 + c1.val;
+        if (normals[0].rank === normals[1].rank) return normals[0].rank === 'Т' ? 33 : 30 + normals[0].val;
     } else if (normals.length === 3) {
-        let c1 = normals.at(0);
-        let c2 = normals.at(1);
-        let c3 = normals.at(2);
-        if (c1.rank === c2.rank && c2.rank === c3.rank) return c1.rank === 'Т' ? 33 : 30 + c1.val;
+        if (normals[0].rank === normals[1].rank && normals[1].rank === normals[2].rank) {
+            return normals[0].rank === 'Т' ? 33 : 30 + normals[0].val;
+        }
     }
 
     let acesCount = normals.filter(c => c.rank === 'Т').length + jokers.length;
-    if (acesCount === 2) {
-        return Math.max(22, getMaxSuitScore(normals, jokers.length));
-    }
+    if (acesCount === 2) return Math.max(22, getMaxSuitScore(normals, jokers.length));
     return getMaxSuitScore(normals, jokers.length);
 }
 
@@ -68,74 +55,32 @@ function getMaxSuitScore(normals, jokerCount) {
     return jokerCount > 0 ? maxNormalSuit + 11 : maxNormalSuit;
 }
 
-function broadcastRoom(roomId) {
-    const room = rooms[roomId];
-    if (!room) return;
-
-    room.players.forEach(p => {
-        const safePlayers = room.players.map(other => ({
-            id: other.id,
-            name: other.name,
-            balance: other.balance,
-            folded: other.folded,
-            isDark: other.isDark,
-            status: other.status,
-            score: room.reveal ? calculateScore(other.hand) : null,
-            hand: (room.reveal && !other.folded) ? other.hand : null
-        }));
-
-        const currentTurnPlayer = room.players.at(room.turnIndex);
-
-        io.to(p.id).emit('stateUpdate', {
-            roomId: room.id,
-            maxSeats: room.maxSeats,
-            pot: room.pot,
-            isSvara: room.isSvara,
-            gameActive: room.gameActive,
-            reveal: room.reveal,
-            turnId: currentTurnPlayer ? currentTurnPlayer.id : null,
-            message: room.message,
-            adminRake: adminRakeBalance,
-            myData: {
-                id: p.id,
-                balance: p.balance,
-                hand: p.hand,
-                isDark: p.isDark,
-                folded: p.folded,
-                score: (!p.isDark || room.reveal) ? calculateScore(p.hand) : null
-            },
-            players: safePlayers
-        });
-    });
-}
-
 function nextTurn(room) {
     let active = room.players.filter(p => !p.folded);
     if (active.length <= 1) {
-        finishRound(room, active.at(0));
+        finishRound(room, active[0]);
         return;
     }
     let loops = 0;
     do {
         room.turnIndex = (room.turnIndex + 1) % room.players.length;
         loops++;
-    } while (room.players.at(room.turnIndex).folded && loops <= room.players.length);
+    } while (room.players[room.turnIndex].folded && loops <= room.players.length);
 }
 
 function finishRound(room, winnerOverride = null) {
     room.gameActive = false;
     room.reveal = true;
-
     let active = room.players.filter(p => !p.folded);
+
     if (winnerOverride) {
         let fee = Math.round(room.pot * RAKE_PERCENT);
         let netWin = room.pot - fee;
         adminRakeBalance += fee;
         winnerOverride.balance += netWin;
-        room.message = `Переміг ${winnerOverride.name}! Виграш: ${netWin} фішок (комісія 3%: ${fee}).`;
+        room.message = `Переміг ${winnerOverride.name}! Виграш: ${netWin} фішок (рейк 3%: ${fee}).`;
         room.pot = 0;
         room.isSvara = false;
-        broadcastRoom(room.id);
         return;
     }
 
@@ -144,66 +89,101 @@ function finishRound(room, winnerOverride = null) {
 
     if (winners.length > 1) {
         room.isSvara = true;
-        let names = winners.map(w => w.name).join(', ');
-        room.message = `🔥 СВАРА (${maxScore} очок) між: ${names}! Банк ${room.pot} фішок іде далі.`;
+        room.message = `🔥 СВАРА (${maxScore} очок)! Банк ${room.pot} фішок іде далі.`;
     } else {
-        let win = winners.at(0);
+        let win = winners[0];
         let fee = Math.round(room.pot * RAKE_PERCENT);
         let netWin = room.pot - fee;
         adminRakeBalance += fee;
         win.balance += netWin;
-        room.message = `🏆 Переміг ${win.name} (${maxScore} очок)! Виграш: +${netWin} фішок (комісія 3%: ${fee}).`;
+        room.message = `🏆 Переміг ${win.name} (${maxScore} очок)! +${netWin} фішок (рейк 3%: ${fee}).`;
         room.pot = 0;
         room.isSvara = false;
     }
-    broadcastRoom(room.id);
 }
 
-io.on('connection', (socket) => {
-    socket.on('joinRoom', ({ roomId, maxSeats, userName }) => {
-        if (!rooms[roomId]) {
-            rooms[roomId] = {
-                id: roomId,
-                maxSeats: Math.min(Math.max(parseInt(maxSeats) || 6, 2), 12),
-                players: [],
-                pot: 0,
-                gameActive: false,
-                reveal: false,
-                isSvara: false,
-                turnIndex: 0,
-                message: 'Очікування гравців за столом...'
-            };
-        }
-        const room = rooms[roomId];
+app.post('/api/join', (req, res) => {
+    const { roomId, maxSeats, playerId, userName } = req.body;
+    if (!rooms[roomId]) {
+        rooms[roomId] = {
+            id: roomId,
+            maxSeats: Math.min(Math.max(parseInt(maxSeats) || 6, 2), 12),
+            players: [],
+            pot: 0,
+            gameActive: false,
+            reveal: false,
+            isSvara: false,
+            turnIndex: 0,
+            message: 'Очікування гравців за столом...'
+        };
+    }
+    const room = rooms[roomId];
+    let existing = room.players.find(p => p.id === playerId);
+    if (!existing) {
         if (room.players.length >= room.maxSeats) {
-            socket.emit('errorMsg', 'Стіл вже заповнений (максимум ' + room.maxSeats + ' чол.)');
-            return;
+            return res.json({ error: 'Стіл вже заповнений!' });
         }
-
-        socket.join(roomId);
-        socket.roomId = roomId;
-
         room.players.push({
-            id: socket.id,
-            name: userName || 'Гравець_' + socket.id.slice(0, 4),
+            id: playerId,
+            name: userName,
             balance: 1000,
             hand: [],
             folded: false,
             isDark: true,
             status: 'Готовий'
         });
-
         room.message = `${userName} сів за стіл (${room.players.length}/${room.maxSeats}).`;
-        broadcastRoom(roomId);
+    }
+    res.json({ ok: true });
+});
+
+app.get('/api/state', (req, res) => {
+    const { roomId, playerId } = req.query;
+    const room = rooms[roomId];
+    if (!room) return res.json({ error: 'Кімнату не знайдено' });
+
+    const me = room.players.find(p => p.id === playerId) || { balance: 1000, hand: [], isDark: true, folded: false };
+    const safePlayers = room.players.map(other => ({
+        id: other.id,
+        name: other.name,
+        balance: other.balance,
+        folded: other.folded,
+        status: other.status,
+        score: room.reveal ? calculateScore(other.hand) : null,
+        hand: (room.reveal && !other.folded) ? other.hand : null
+    }));
+
+    res.json({
+        roomId: room.id,
+        maxSeats: room.maxSeats,
+        pot: room.pot,
+        isSvara: room.isSvara,
+        gameActive: room.gameActive,
+        reveal: room.reveal,
+        turnId: room.players[room.turnIndex]?.id || null,
+        message: room.message,
+        adminRake: adminRakeBalance,
+        myData: {
+            id: me.id,
+            balance: me.balance,
+            hand: me.hand,
+            isDark: me.isDark,
+            folded: me.folded,
+            score: (!me.isDark || room.reveal) ? calculateScore(me.hand) : null
+        },
+        players: safePlayers
     });
+});
 
-    socket.on('startRound', () => {
-        const room = rooms[socket.roomId];
-        if (!room || room.players.length < 2 || room.gameActive) return;
+app.post('/api/action', (req, res) => {
+    const { roomId, playerId, action, isDarkBet } = req.body;
+    const room = rooms[roomId];
+    if (!room) return res.json({ ok: false });
 
+    if (action === 'start') {
+        if (room.players.length < 2 || room.gameActive) return res.json({ ok: false });
         let deck = createDeck();
         if (!room.isSvara) room.pot = 0;
-
         room.players.forEach(p => {
             if (p.balance < 50) p.balance = 1000;
             p.balance -= 50;
@@ -213,82 +193,57 @@ io.on('connection', (socket) => {
             p.isDark = true;
             p.status = 'В темну (50)';
         });
-
         room.gameActive = true;
         room.reveal = false;
         room.turnIndex = 0;
-        room.message = room.isSvara ? '🔥 СВАРА почалася! Хід першого гравця.' : 'Карти роздано! Ставки в темну або в світлу.';
-        broadcastRoom(room.id);
-    });
+        room.message = room.isSvara ? '🔥 СВАРА почалася!' : 'Карти роздано!';
+    }
 
-    socket.on('lookCards', () => {
-        const room = rooms[socket.roomId];
-        if (!room || !room.gameActive) return;
-        const p = room.players.find(x => x.id === socket.id);
-        if (p && p.isDark) {
+    if (action === 'look') {
+        const p = room.players.find(x => x.id === playerId);
+        if (p && p.isDark && room.gameActive) {
             p.isDark = false;
             p.status = 'В світлу';
-            broadcastRoom(room.id);
         }
-    });
+    }
 
-    socket.on('bet', ({ isDarkBet }) => {
-        const room = rooms[socket.roomId];
-        if (!room || !room.gameActive) return;
-        const p = room.players.at(room.turnIndex);
-        if (!p || p.id !== socket.id) return;
-
-        let amount = isDarkBet && p.isDark ? 50 : 100;
-        if (p.balance < amount) amount = p.balance;
-        p.balance -= amount;
-        room.pot += amount;
-        p.status = isDarkBet && p.isDark ? `В темну (+${amount})` : `Ставка (+${amount})`;
-        room.message = `${p.name} поставив ${amount} фішок.`;
-
-        nextTurn(room);
-        broadcastRoom(room.id);
-    });
-
-    socket.on('showdown', () => {
-        const room = rooms[socket.roomId];
-        if (!room || !room.gameActive) return;
-        const p = room.players.at(room.turnIndex);
-        if (!p || p.id !== socket.id) return;
-
-        if (p.balance >= 50) {
-            p.balance -= 50;
-            room.pot += 50;
+    if (action === 'bet' && room.gameActive) {
+        const p = room.players[room.turnIndex];
+        if (p && p.id === playerId) {
+            let amount = isDarkBet && p.isDark ? 50 : 100;
+            if (p.balance < amount) amount = p.balance;
+            p.balance -= amount;
+            room.pot += amount;
+            p.status = isDarkBet && p.isDark ? `В темну (+${amount})` : `Ставка (+${amount})`;
+            room.message = `${p.name} поставив ${amount} фішок.`;
+            nextTurn(room);
         }
-        finishRound(room);
-    });
+    }
 
-    socket.on('fold', () => {
-        const room = rooms[socket.roomId];
-        if (!room || !room.gameActive) return;
-        const p = room.players.at(room.turnIndex);
-        if (!p || p.id !== socket.id) return;
-
-        p.folded = true;
-        p.status = 'Впав ❌';
-        room.message = `${p.name} скинув карти.`;
-
-        nextTurn(room);
-        broadcastRoom(room.id);
-    });
-
-    socket.on('disconnect', () => {
-        const room = rooms[socket.roomId];
-        if (!room) return;
-        room.players = room.players.filter(p => p.id !== socket.id);
-        if (room.players.length === 0) {
-            delete rooms[socket.roomId];
-        } else {
-            if (room.turnIndex >= room.players.length) room.turnIndex = 0;
-            room.message = 'Один із гравців залишив стіл.';
-            broadcastRoom(room.id);
+    if (action === 'showdown' && room.gameActive) {
+        const p = room.players[room.turnIndex];
+        if (p && p.id === playerId) {
+            if (p.balance >= 50) { p.balance -= 50; room.pot += 50; }
+            finishRound(room);
         }
-    });
+    }
+
+    if (action === 'fold' && room.gameActive) {
+        const p = room.players[room.turnIndex];
+        if (p && p.id === playerId) {
+            p.folded = true;
+            p.status = 'Впав ❌';
+            room.message = `${p.name} скинув карти.`;
+            nextTurn(room);
+        }
+    }
+
+    res.json({ ok: true });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => console.log(`Server started on ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Server live on ${PORT}`));
+
+
+
+        
